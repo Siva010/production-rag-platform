@@ -13,30 +13,6 @@ The architecture consists of four main components that work together to process 
 3.  **Product Service**: A mock backend service representing a protected resource. It only receives requests that have been successfully authorized by the Rate Limiter Service.
 4.  **Redis**: An in-memory data store used to maintain the state of the token buckets for each client IP address in a distributed and highly available manner.
 
-```mermaid
-graph TD
-    subgraph "Client"
-        A[User Request]
-    end
-
-    subgraph "System Boundary"
-        A --> B(API Gateway);
-        B --> C{Rate Limiter Service};
-        C -- Allowed --> D[Product Service];
-        C -- Denied --> B;
-        B -- 429 Too Many Requests --> A;
-        D -- 200 OK with Data --> C;
-        C --> B;
-        B -- 200 OK with Data --> A;
-        C <--> E[(Redis)];
-    end
-
-    style B fill:#26A69A,stroke:#004D40,stroke-width:2px,color:#fff
-    style C fill:#5C6BC0,stroke:#1A237E,stroke-width:2px,color:#fff
-    style D fill:#66BB6A,stroke:#1B5E20,stroke-width:2px,color:#fff
-    style E fill:#EF5350,stroke:#B71C1C,stroke-width:2px,color:#fff
-```
-
 ## **Key Features**
 
 * **Microservices Architecture:** Decoupled services (Gateway, Rate Limiter, Product Service) for independent scaling and development.  
