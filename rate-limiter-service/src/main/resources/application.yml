@@ -6,9 +6,23 @@ spring:
     redis:
       host: redis
       port: 6379
+      # Connection pool settings to avoid exhaustion under high load
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+          max-wait: 1000ms
+      # Fail fast if Redis is unreachable at startup (circuit breaker will handle runtime failures)
+      connect-timeout: 2000ms
+      command-timeout: 1000ms
 
 server:
   port: 8082
+
+# Downstream service URL — override via environment variable PRODUCT_SERVICE_URL in Docker/K8s
+product-service:
+  url: http://product-service:8081
 
 rate-limiter:
   bucket-capacity: 10
@@ -32,3 +46,20 @@ resilience4j:
         wait-duration: 200ms
         retry-exceptions:
           - io.lettuce.core.RedisConnectionException
+
+# Actuator — expose health, info, and metrics for monitoring / Docker healthchecks
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: INFO
+    dev.trafficguard: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

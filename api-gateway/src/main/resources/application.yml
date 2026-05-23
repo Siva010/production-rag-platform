@@ -13,3 +13,24 @@ spring:
               uri: http://rate-limiter-service:8082 # Forward to our rate-limiter-service
               predicates:
                 - Path=/api/** # Match any request starting with /api/
+      # Global timeouts for all routes — prevents gateway from hanging on slow/unavailable upstreams
+      httpclient:
+        connect-timeout: 2000
+        response-timeout: 10s
+
+# Actuator — expose health and metrics endpoints for load balancer health checks and monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: INFO
+    org.springframework.cloud.gateway: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

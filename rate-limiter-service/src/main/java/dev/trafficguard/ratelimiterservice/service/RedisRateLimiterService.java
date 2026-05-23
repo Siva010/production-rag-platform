@@ -22,12 +22,11 @@ public class RedisRateLimiterService {
     private static final Logger log = LoggerFactory.getLogger(RedisRateLimiterService.class);
 
     /**
-     * Constructs a  RedisRateLimiterService with the given RedisTemplate, RedisScript, and rate limiter properties.
-     * @param redisTemplate the Redis template used for executing Redis operation
+     * Constructs a RedisRateLimiterService with the given RedisTemplate, RedisScript, and rate limiter properties.
+     * @param redisTemplate the Redis template used for executing Redis operations
      * @param redisScript the Redis script used for rate limiting logic
      * @param rateLimiterProperties configuration properties for rate limiting (bucket size, refill rate)
      */
-
     public RedisRateLimiterService(RedisTemplate<String, String> redisTemplate, RedisScript<Long> redisScript, RateLimiterProperties rateLimiterProperties) {
         this.redisTemplate = redisTemplate;
         this.redisScript = redisScript;
@@ -35,30 +34,29 @@ public class RedisRateLimiterService {
     }
 
     /**
-     * checks if the given key (e.g client IP) is allowed to make a request using the default of 1 token
-     * @param key the key representing a client (forexample IP address)
+     * Checks if the given key (e.g. client IP) is allowed to make a request, consuming 1 token by default.
+     * @param key the key representing a client (for example, an IP address)
      * @return true if allowed, false if the rate limit has been exceeded
      */
-
-    public boolean isAllowed(String key){
+    public boolean isAllowed(String key) {
         return isAllowed(key, 1L);
     }
 
     /**
-     * checks if a given key is allowed to make a request for a specified number of tokens
+     * Checks if a given key is allowed to make a request consuming a specified number of tokens.
      * <p>
-     * This method uses a Redis script to enforce rate limits and is decorated with a circuitbreaker and retry
-     * @param key the key representing a client (forexample IP address)
-     * @param requestedTokens the number of tokens requested for this operation
+     * This method executes an atomic Redis Lua script to enforce token-bucket rate limits.
+     * It is decorated with a circuit breaker and retry to gracefully handle Redis unavailability.
+     * @param key the key representing a client (for example, an IP address)
+     * @param requestedTokens the number of tokens this request costs
      * @return true if allowed, false if the rate limit has been exceeded
      */
-
     @CircuitBreaker(name = "redis", fallbackMethod = "fallbackIsAllowed")
     @Retry(name = "redis")
     public boolean isAllowed(String key, long requestedTokens) {
-
         String userKey = "rate:limiter:" + key;
         long currentTime = Instant.now().getEpochSecond();
+        // Convert per-minute refill rate to per-second for the Lua script
         double refillRatePerSecond = rateLimiterProperties.getRefillRatePerMinute() / 60.0;
 
         Long result = redisTemplate.execute(
@@ -70,20 +68,21 @@ public class RedisRateLimiterService {
                 String.valueOf(requestedTokens)
         );
 
-        return result == 1L;
+        // Guard against null result (e.g. script evaluation failure); default to deny
+        return result != null && result == 1L;
     }
 
     /**
-     * Fallback methos used by the circuitBreaker when Redis is unavailable or an error occurs
+     * Fallback method invoked by the circuit breaker when Redis is unavailable or an error occurs.
      * <p>
-     * Always return true toi allow the request when the circuit is open
-     * @param key the key representing a client (forexample IP address)
+     * Defaults to allowing the request (fail-open) to prevent cascading failures from blocking all traffic.
+     * @param key the key representing a client (for example, an IP address)
+     * @param requestedTokens the number of tokens that were requested
      * @param t the Throwable that triggered the fallback
-     * @return true to allow the request despite the failure
+     * @return true to allow the request despite the Redis failure
      */
-
-    public boolean fallbackIsAllowed(String key, Throwable t) {
-        log.error("Circuit breaker is open for key: {}. Fallback enabled due to: {}", key, t.getMessage());
+    public boolean fallbackIsAllowed(String key, long requestedTokens, Throwable t) {
+        log.error("Circuit breaker is open for key: {}. Falling back to fail-open. Reason: {}", key, t.getMessage());
         return true;
     }
 
